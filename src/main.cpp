@@ -148,14 +148,17 @@ void loop() {
       sendDataToServer(server, TXbuffer, client_hostname, client_port);
     }
     readDataFromServer(server, RXbuffer, client_hostname, client_port);
-    #if ENABLE_SERIAL_PRINT == 1
-      if (RXbuffer.length() > 0)
-      {
+
+    if (RXbuffer.length() > 0)
+    {
+      #if ENABLE_SERIAL_PRINT == 1
         Serial.print("From server: ");
-        Serial.println(RXbuffer);
-      }
-    #endif
-    
+      #endif
+      Serial.print(RXbuffer);
+      #if ENABLE_SERIAL_PRINT == 1
+        Serial.println("");
+      #endif
+    }
     delay(5);
   }
 }

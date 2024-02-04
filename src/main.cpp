@@ -9,6 +9,7 @@
 #define ENABLE_SERIAL_PRINT 0
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define COMMENT_CHARACTER '%'
+#define MAX_BUFFER_SIZE 16384
 
 
 #define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
@@ -42,14 +43,21 @@ void escapeFrontCommentCharacter(String &str, char commentCharacter){
 }
 
 void setup() {
+  
   Serial.begin(115200);
   while (!Serial){
     delay(100);
   }
   Serial.setRxBufferSize(2048);
-
+  delay(100);
+  
+  #if ENABLE_SERIAL_PRINT == 1
+    while (Serial.availableForWrite() <= 0){delay(10);}
+    Serial.println("Serial port connected");
+  #endif
+  
   #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
-    while (!Serial.available());
+    while (Serial.available() <= 0){delay(10);}
     wifi_ssid = Serial.readStringUntil('\n');
     removeLastCarrerReturn(wifi_ssid);
     escapeFrontCommentCharacter(wifi_ssid, COMMENT_CHARACTER);
@@ -57,7 +65,7 @@ void setup() {
       Serial.println(wifi_ssid);
     #endif
 
-    while (!Serial.available());
+    while (Serial.available() <= 0){delay(10);}
     wifi_password = Serial.readStringUntil('\n');
     removeLastCarrerReturn(wifi_password);
     escapeFrontCommentCharacter(wifi_password, COMMENT_CHARACTER);
@@ -66,7 +74,7 @@ void setup() {
     #endif
     
 
-    while (!Serial.available());
+    while (Serial.available() <= 0){delay(10);}
     client_hostname = Serial.readStringUntil('\n');
     removeLastCarrerReturn(client_hostname);
     escapeFrontCommentCharacter(client_hostname, COMMENT_CHARACTER);
@@ -74,7 +82,7 @@ void setup() {
       Serial.println(client_hostname);
     #endif
 
-    while (!Serial.available());
+    while (Serial.available() <= 0){delay(10);}
     String temp_port_str = Serial.readStringUntil('\n');
     removeLastCarrerReturn(temp_port_str);
     escapeFrontCommentCharacter(temp_port_str, COMMENT_CHARACTER);
@@ -140,6 +148,11 @@ void readDataFromServer(WiFiClient& server, std::vector<char>& buffer, String ho
   if (server.available() > 0)
   {
     bytesAvailable = (size_t)server.available();
+
+    if ((buffer.size() + bytesAvailable) > MAX_BUFFER_SIZE) {
+      buffer.erase(buffer.begin(),buffer.begin()+((buffer.size() + bytesAvailable) - MAX_BUFFER_SIZE));
+    }
+    
     buffer.resize(buffer.size() + bytesAvailable);
     bytesRead = server.readBytes(buffer.data() + buffer.size() - bytesAvailable, bytesAvailable);
     buffer.resize((int)buffer.size() - (int)((int)bytesAvailable - (int)bytesRead));
@@ -151,6 +164,11 @@ void readDataFromSerial(HardwareSerial& serialPort, std::vector<char>& buffer){
     if (serialPort.available() > 0)
     {
       bytesAvailableSerial = serialPort.available();
+
+      if ((buffer.size() + bytesAvailableSerial) > MAX_BUFFER_SIZE) {
+        buffer.erase(buffer.begin(),buffer.begin()+((buffer.size() + bytesAvailableSerial) - MAX_BUFFER_SIZE));
+      }
+
       buffer.resize(buffer.size() + bytesAvailableSerial);
       bytesReadFromSerial = serialPort.readBytes(buffer.data() + buffer.size() - bytesAvailableSerial, bytesAvailableSerial);
       buffer.resize((int)buffer.size() - (int)((int)bytesAvailableSerial - (int)bytesReadFromSerial));
@@ -167,6 +185,9 @@ void loop() {
 
   TXbuffer.clear();
   RXbuffer.clear();
+  TXbuffer.reserve(MAX_BUFFER_SIZE);
+  RXbuffer.reserve(MAX_BUFFER_SIZE);
+
   startTime = millis();
   connectToServer(server, client_hostname, client_port);
   while (1)

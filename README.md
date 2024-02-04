@@ -1,4 +1,4 @@
-
+```ruby
 /*
 * Preconditions: Connect your arduino serial port to the esp serial port.
 * This program will send to ESP the informations to connect to a wifi network and a server.
@@ -28,3 +28,4 @@ void setup() {
 void loop() {
   Serial.println("Hello world") // this message will be sent to the ESP via serial communication and the ESP will forward it to the server
 }
+```

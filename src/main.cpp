@@ -8,8 +8,10 @@
 
 #define ENABLE_SERIAL_PRINT 0
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
-#define COMMENT_CHARACTER '%'
+#define ENABLE_INIT_SEQUENCE 1
+#define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 #define MAX_BUFFER_SIZE 16384
+#define INIT_SEQUENCE "SERIAL2WIFI\r\n"
 
 
 #define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
@@ -22,10 +24,11 @@ String client_hostname = "192.168.0.227";
 int client_port = 6789;
 
 /*
-String wifi_ssid = "Off Limits2";
-String wifi_password = "J7s2tzvzKzva";
-String client_hostname = "192.168.79.243";
-int client_port = 6789;
+SERIAL2WIFI
+Off Limits
+J7s2tzvzKzva
+192.168.0.227
+6789
 */
 
 void removeLastCarrerReturn(String &str){
@@ -42,54 +45,99 @@ void escapeFrontCommentCharacter(String &str, char commentCharacter){
   }
 }
 
+String serialReadStringUntil_blocking(HardwareSerial& serialPort, char terminatorCharacter){
+  char tempChar;
+  String result = "";
+  while (serialPort)
+  {
+    while (serialPort.available() > 0){
+      tempChar = (char)serialPort.read();
+      if (tempChar == terminatorCharacter) {
+        return result;
+      }
+      result += tempChar;
+    }
+  }
+  return result;
+}
+
 void setup() {
-  
+  String initializationTemp = "";
+  bool initializationStringFound = false;
+  char tempChar;
+
+  Serial.setRxBufferSize(2048);
   Serial.begin(115200);
   while (!Serial){
     delay(100);
   }
-  Serial.setRxBufferSize(2048);
-  delay(100);
   
   #if ENABLE_SERIAL_PRINT == 1
-    while (Serial.availableForWrite() <= 0){delay(10);}
+    while (Serial.availableForWrite() <= 0){}
     Serial.println("Serial port connected");
+  #endif
+
+  #if ENABLE_INIT_SEQUENCE == 1
+    while (initializationStringFound == false)
+    {
+      while (Serial.available() > 0){
+        tempChar = (char)Serial.read();
+        initializationTemp += tempChar;
+        #if ENABLE_SERIAL_PRINT == 1
+          Serial.print(tempChar);
+        #endif
+
+        if (initializationTemp.length() > strlen(INIT_SEQUENCE)) {
+          initializationTemp.remove(0, initializationTemp.length() - (strlen(INIT_SEQUENCE)));
+        }
+        if (initializationTemp.length() == strlen(INIT_SEQUENCE)) {
+          if (strncmp(initializationTemp.c_str(), INIT_SEQUENCE, strlen(INIT_SEQUENCE)) == 0) {
+            initializationStringFound = true;
+            #if ENABLE_SERIAL_PRINT == 1
+              Serial.println();
+              Serial.println("Initialization sequence completed!");
+            #endif
+            break;
+          }
+        }
+      }
+    }
   #endif
   
   #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
-    while (Serial.available() <= 0){delay(10);}
-    wifi_ssid = Serial.readStringUntil('\n');
+    while (Serial.available() <= 0){}
+    wifi_ssid = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(wifi_ssid);
-    escapeFrontCommentCharacter(wifi_ssid, COMMENT_CHARACTER);
+    escapeFrontCommentCharacter(wifi_ssid, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
     #if ENABLE_SERIAL_PRINT == 1
-      Serial.println(wifi_ssid);
+      Serial.println("SSID: " + wifi_ssid);
     #endif
 
-    while (Serial.available() <= 0){delay(10);}
-    wifi_password = Serial.readStringUntil('\n');
+    while (Serial.available() <= 0){}
+    wifi_password = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(wifi_password);
-    escapeFrontCommentCharacter(wifi_password, COMMENT_CHARACTER);
+    escapeFrontCommentCharacter(wifi_password, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
     #if ENABLE_SERIAL_PRINT == 1
-      Serial.println(wifi_password);
+      Serial.println("Password: " + wifi_password);
     #endif
     
 
-    while (Serial.available() <= 0){delay(10);}
-    client_hostname = Serial.readStringUntil('\n');
+    while (Serial.available() <= 0){}
+    client_hostname = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(client_hostname);
-    escapeFrontCommentCharacter(client_hostname, COMMENT_CHARACTER);
+    escapeFrontCommentCharacter(client_hostname, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
     #if ENABLE_SERIAL_PRINT == 1
-      Serial.println(client_hostname);
+      Serial.println("Hostname: " + client_hostname);
     #endif
 
-    while (Serial.available() <= 0){delay(10);}
-    String temp_port_str = Serial.readStringUntil('\n');
+    while (Serial.available() <= 0){}
+    String temp_port_str = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(temp_port_str);
-    escapeFrontCommentCharacter(temp_port_str, COMMENT_CHARACTER);
+    escapeFrontCommentCharacter(temp_port_str, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
     
     client_port = temp_port_str.toInt();
     #if ENABLE_SERIAL_PRINT == 1
-      Serial.println(client_port);
+      Serial.println("Port: " + String(client_port));
     #endif
   #endif
 

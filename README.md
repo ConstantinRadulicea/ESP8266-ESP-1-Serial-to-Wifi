@@ -12,20 +12,24 @@
 #define DEBUG_HOST_IPADDRESS "192.168.0.227"
 #define DEBUG_HOST_PORT 6789
 
-#define ESP_MSG_INIT_CHARACTER '%'
+#define ESP_INIT_SEQUENCE "SERIAL2WIFI\r\n"
+#define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 
 void setup() {
   Serial.begin(115200);
   while (!Serial){
     delay(100);
   }
-  Serial.println(ESP_MSG_INIT_CHARACTER + String(DEBUG_WIFI_SSID));
-  Serial.println(ESP_MSG_INIT_CHARACTER + String(DEBUG_WIFI_PASSWORD));
-  Serial.println(ESP_MSG_INIT_CHARACTER + String(DEBUG_HOST_IPADDRESS));
-  Serial.println(ESP_MSG_INIT_CHARACTER + String(DEBUG_HOST_PORT));
+  delay(2000);
+  Serial.print(ESP_INIT_SEQUENCE);
+  Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(DEBUG_WIFI_SSID));
+  Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(DEBUG_WIFI_PASSWORD));
+  Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(DEBUG_HOST_IPADDRESS));
+  Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(DEBUG_HOST_PORT));
 }
 
 void loop() {
-  Serial.println("Hello world") // this message will be sent to the ESP via serial communication and the ESP will forward it to the server
+  Serial.println("Hello world"); // this message will be sent to the ESP via serial communication and the ESP will forward it to the server
+  delay(1000);
 }
 ```

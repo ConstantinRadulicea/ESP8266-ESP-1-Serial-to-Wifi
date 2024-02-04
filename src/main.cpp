@@ -14,11 +14,18 @@
 #define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
 #define LOWPOWER_MODE_LOOP_DELAY_MS 100
 
+
 String wifi_ssid = "Off Limits";
 String wifi_password = "J7s2tzvzKzva";
 String client_hostname = "192.168.0.227";
 int client_port = 6789;
 
+/*
+String wifi_ssid = "Off Limits2";
+String wifi_password = "J7s2tzvzKzva";
+String client_hostname = "192.168.79.243";
+int client_port = 6789;
+*/
 
 void removeLastCarrerReturn(String &str){
   if (str.charAt(str.length()-1) == '\r')
@@ -99,6 +106,9 @@ static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
   while (1)
   {
     if (!server.connect(hostName, port)) {
+      #if ENABLE_SERIAL_PRINT == 1
+        Serial.println("Connection failed!");
+      #endif
       delay(100);
       continue;
     }

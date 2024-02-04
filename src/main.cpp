@@ -34,10 +34,6 @@ void escapeFrontCommentCharacter(String &str, char commentCharacter){
   }
 }
 
-
-#if ENABLE_SERIAL_PRINT == 1
-#endif
-
 void setup() {
   Serial.begin(115200);
   while (!Serial){

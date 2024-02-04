@@ -4,9 +4,15 @@
 */ 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <vector>
 
 #define ENABLE_SERIAL_PRINT 0
+#define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define COMMENT_CHARACTER '%'
+
+
+#define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
+#define LOWPOWER_MODE_LOOP_DELAY_MS 100
 
 String wifi_ssid = "Off Limits";
 String wifi_password = "J7s2tzvzKzva";
@@ -38,42 +44,45 @@ void setup() {
     delay(100);
   }
 
-  while (!Serial.available());
-  wifi_ssid = Serial.readStringUntil('\n');
-  removeLastCarrerReturn(wifi_ssid);
-  escapeFrontCommentCharacter(wifi_ssid, COMMENT_CHARACTER);
-  #if ENABLE_SERIAL_PRINT == 1
-    Serial.println(wifi_ssid);
-  #endif
+  #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+    while (!Serial.available());
+    wifi_ssid = Serial.readStringUntil('\n');
+    removeLastCarrerReturn(wifi_ssid);
+    escapeFrontCommentCharacter(wifi_ssid, COMMENT_CHARACTER);
+    #if ENABLE_SERIAL_PRINT == 1
+      Serial.println(wifi_ssid);
+    #endif
 
-  while (!Serial.available());
-  wifi_password = Serial.readStringUntil('\n');
-  removeLastCarrerReturn(wifi_password);
-  escapeFrontCommentCharacter(wifi_password, COMMENT_CHARACTER);
-  #if ENABLE_SERIAL_PRINT == 1
-    Serial.println(wifi_password);
-  #endif
-  
+    while (!Serial.available());
+    wifi_password = Serial.readStringUntil('\n');
+    removeLastCarrerReturn(wifi_password);
+    escapeFrontCommentCharacter(wifi_password, COMMENT_CHARACTER);
+    #if ENABLE_SERIAL_PRINT == 1
+      Serial.println(wifi_password);
+    #endif
+    
 
-  while (!Serial.available());
-  client_hostname = Serial.readStringUntil('\n');
-  removeLastCarrerReturn(client_hostname);
-  escapeFrontCommentCharacter(client_hostname, COMMENT_CHARACTER);
-  #if ENABLE_SERIAL_PRINT == 1
-    Serial.println(client_hostname);
-  #endif
+    while (!Serial.available());
+    client_hostname = Serial.readStringUntil('\n');
+    removeLastCarrerReturn(client_hostname);
+    escapeFrontCommentCharacter(client_hostname, COMMENT_CHARACTER);
+    #if ENABLE_SERIAL_PRINT == 1
+      Serial.println(client_hostname);
+    #endif
 
-  while (!Serial.available());
-  String temp_port_str = Serial.readStringUntil('\n');
-  removeLastCarrerReturn(temp_port_str);
-  escapeFrontCommentCharacter(temp_port_str, COMMENT_CHARACTER);
-  
-  client_port = temp_port_str.toInt();
-  #if ENABLE_SERIAL_PRINT == 1
-    Serial.println(client_port);
+    while (!Serial.available());
+    String temp_port_str = Serial.readStringUntil('\n');
+    removeLastCarrerReturn(temp_port_str);
+    escapeFrontCommentCharacter(temp_port_str, COMMENT_CHARACTER);
+    
+    client_port = temp_port_str.toInt();
+    #if ENABLE_SERIAL_PRINT == 1
+      Serial.println(client_port);
+    #endif
   #endif
 
   WiFi.begin(wifi_ssid, wifi_password);
+  WiFi.setAutoReconnect(true);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(100);
@@ -102,63 +111,111 @@ static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
   }
 }
 
-void sendDataToServer(WiFiClient& server, String& buffer, String hostName, uint16_t port){
-  int bytesRemaining, bytesWrittenNow;
-    if (buffer.length() <= 0) {
+void sendDataToServer(WiFiClient& server, std::vector<char>& buffer, String hostName, uint16_t port){
+  size_t bytesWrittenNow;
+
+    if (buffer.size() <= 0) {
       return;
     }
   if (!server.connected()) {
     connectToServer(server, hostName, port);
   }
-  bytesRemaining = buffer.length();
-  while (bytesRemaining > 0 && server.connected())
-  {
-    bytesWrittenNow = server.print(buffer);
-    bytesRemaining -= bytesWrittenNow;
-    buffer.remove(0, bytesWrittenNow);
-  }
+  bytesWrittenNow = server.write(buffer.data(), buffer.size());
+  buffer.erase(buffer.begin(),buffer.begin()+bytesWrittenNow);
 }
 
-void readDataFromServer(WiFiClient& server, String& buffer, String hostName, uint16_t port){
-  buffer = "";
+void readDataFromServer(WiFiClient& server, std::vector<char>& buffer, String hostName, uint16_t port){
   if (!server.connected()) {
     connectToServer(server, hostName, port);
   }
-  while(server.available()) {
-    buffer += server.readString();
+
+  size_t bytesRead, bytesAvailable;
+  if (server.available() > 0)
+  {
+    bytesAvailable = (size_t)server.available();
+    buffer.resize(buffer.size() + bytesAvailable);
+    bytesRead = server.readBytes(buffer.data() + buffer.size() - bytesAvailable, bytesAvailable);
+    buffer.resize((int)buffer.size() - (int)((int)bytesAvailable - (int)bytesRead));
   }
 }
 
+void readDataFromSerial(HardwareSerial& serialPort, std::vector<char>& buffer){
+  size_t bytesAvailableSerial, bytesReadFromSerial;
+    if (serialPort.available() > 0)
+    {
+      bytesAvailableSerial = serialPort.available();
+      buffer.resize(buffer.size() + bytesAvailableSerial);
+      bytesReadFromSerial = serialPort.readBytes(buffer.data() + buffer.size() - bytesAvailableSerial, bytesAvailableSerial);
+      buffer.resize((int)buffer.size() - (int)((int)bytesAvailableSerial - (int)bytesReadFromSerial));
+    }
+}
 
 void loop() {
-  
+  bool activeLowPowerMode = false;
+  bool activityInLastIteration = false;
+  unsigned int startTime;
+  float inactivityTime_ms = 0.0f;
   WiFiClient server;
-  String TXbuffer, RXbuffer;
+  std::vector<char> TXbuffer, RXbuffer;
+
+  TXbuffer.clear();
+  RXbuffer.clear();
+  startTime = millis();
   connectToServer(server, client_hostname, client_port);
   while (1)
   {
-    if (Serial.available())
+    if (activityInLastIteration == true)
     {
-      TXbuffer = Serial.readStringUntil('\n');
-      TXbuffer += '\n';
+      startTime = millis();
+    }
+    activityInLastIteration = false;
+
+    if (activeLowPowerMode) {
+      delay(LOWPOWER_MODE_LOOP_DELAY_MS);
+    }
+
+    readDataFromSerial(Serial, TXbuffer);
+    if (TXbuffer.size() > 0)
+    {
+      activityInLastIteration = true;
       #if ENABLE_SERIAL_PRINT == 1
-        Serial.print("To server: ");
-        Serial.println(TXbuffer);
+        Serial.print("To server [" + String(TXbuffer.size()) + "]: ");
+        Serial.write(TXbuffer.data(), TXbuffer.size());
+        Serial.println();
       #endif
       sendDataToServer(server, TXbuffer, client_hostname, client_port);
     }
+
     readDataFromServer(server, RXbuffer, client_hostname, client_port);
 
-    if (RXbuffer.length() > 0)
+    if (RXbuffer.size() > 0)
     {
+      activityInLastIteration = true;
       #if ENABLE_SERIAL_PRINT == 1
         Serial.print("From server: ");
       #endif
-      Serial.print(RXbuffer);
+      RXbuffer.erase(RXbuffer.begin(),RXbuffer.begin() + Serial.write(RXbuffer.data(), RXbuffer.size()));
       #if ENABLE_SERIAL_PRINT == 1
-        Serial.println("");
+        Serial.println();
       #endif
     }
-    delay(5);
+    if (activityInLastIteration == false)
+    {
+      inactivityTime_ms = (float)millis() - (float)startTime;
+      #if ENABLE_SERIAL_PRINT == 1
+        Serial.print("Inactivity time[ms]: ");
+        Serial.println(inactivityTime_ms);
+      #endif
+      if (inactivityTime_ms >= (float)LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS) {
+        activeLowPowerMode = true;
+        #if ENABLE_SERIAL_PRINT == 1
+          Serial.println("LowPowerMode: ENABLED");
+        #endif
+      }
+    }
+    else{
+      inactivityTime_ms = 0;
+      activeLowPowerMode = false;
+    }
   }
 }

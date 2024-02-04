@@ -43,6 +43,7 @@ void setup() {
   while (!Serial){
     delay(100);
   }
+  Serial.setRxBufferSize(2048);
 
   #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
     while (!Serial.available());

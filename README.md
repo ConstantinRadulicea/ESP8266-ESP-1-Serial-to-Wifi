@@ -1,4 +1,4 @@
-```ruby
+```cpp
 /*
 * Preconditions: Connect your arduino serial port to the esp serial port.
 * This program will send to ESP the informations to connect to a wifi network and a server.

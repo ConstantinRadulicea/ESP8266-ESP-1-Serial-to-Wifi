@@ -7,9 +7,9 @@
 
 #include <Arduino.h>
 
-#define DEBUG_WIFI_SSID "Off Limits"
+#define DEBUG_WIFI_SSID "Off Limits2"
 #define DEBUG_WIFI_PASSWORD "J7s2tzvzKzva"
-#define DEBUG_HOST_IPADDRESS "192.168.0.227"
+#define DEBUG_HOST_IPADDRESS "192.168.79.243"
 #define DEBUG_HOST_PORT 6789
 
 #define ESP_INIT_SEQUENCE "SERIAL2WIFI\r\n"

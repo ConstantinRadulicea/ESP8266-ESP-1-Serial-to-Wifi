@@ -11,16 +11,16 @@
 #define ENABLE_INIT_SEQUENCE 1
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 #define MAX_BUFFER_SIZE 16384
-#define INIT_SEQUENCE "SERIAL2WIFI\r\n"
+#define INIT_SEQUENCE "%SERIAL2WIFI\r\n"
 
 
 #define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
 #define LOWPOWER_MODE_LOOP_DELAY_MS 100
 
 
-String wifi_ssid = "Off Limits";
+String wifi_ssid = "Off Limits2";
 String wifi_password = "J7s2tzvzKzva";
-String client_hostname = "192.168.0.227";
+String client_hostname = "192.168.79.243";
 int client_port = 6789;
 
 /*

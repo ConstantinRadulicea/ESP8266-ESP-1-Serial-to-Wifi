@@ -16,11 +16,20 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266SSDP.h>
+#include <ESP8266WebServer.h>
 #include <vector>
+
+#define CONFIGURATION_CLIENT 1
+#define CONFIGURATION_SERVER 0
+
+#define SERIALPORT_BAUDRATE 230400
+
 
 #define ENABLE_SERIAL_PRINT 0
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define ENABLE_INIT_SEQUENCE 1
+#define ENABLE_SSDP 1
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 #define MAX_BUFFER_SIZE 16384
 #define INIT_SEQUENCE "%SERIAL2WIFI\r\n"
@@ -30,10 +39,14 @@
 #define LOWPOWER_MODE_LOOP_DELAY_MS 100
 
 
-String wifi_ssid = "Off Limits2";
+String wifi_ssid = "Off Limits";
 String wifi_password = "J7s2tzvzKzva";
-String client_hostname = "192.168.79.243";
+String client_hostname = "192.168.0.247";
 int client_port = 6789;
+
+#if ENABLE_SSDP == 1
+  ESP8266WebServer HTTP(80);
+#endif
 
 /*
 SERIAL2WIFI
@@ -51,8 +64,7 @@ void removeLastCarrerReturn(String &str){
 }
 
 void escapeFrontCommentCharacter(String &str, char commentCharacter){
-  if (str.charAt(0) == commentCharacter)
-  {
+  if (str.charAt(0) == commentCharacter) {
     str.remove(0, 1);
   }
 }
@@ -79,7 +91,7 @@ void setup() {
   char tempChar;
 
   Serial.setRxBufferSize(2048);
-  Serial.begin(115200);
+  Serial.begin(SERIALPORT_BAUDRATE);
   while (!Serial){
     delay(100);
   }
@@ -133,13 +145,14 @@ void setup() {
       Serial.println("Password: " + wifi_password);
     #endif
     
-
-    while (Serial.available() <= 0){}
-    client_hostname = serialReadStringUntil_blocking(Serial, '\n');
-    removeLastCarrerReturn(client_hostname);
-    escapeFrontCommentCharacter(client_hostname, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
-    #if ENABLE_SERIAL_PRINT == 1
-      Serial.println("Hostname: " + client_hostname);
+    #if CONFIGURATION_CLIENT == 1
+      while (Serial.available() <= 0){}
+      client_hostname = serialReadStringUntil_blocking(Serial, '\n');
+      removeLastCarrerReturn(client_hostname);
+      escapeFrontCommentCharacter(client_hostname, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
+      #if ENABLE_SERIAL_PRINT == 1
+        Serial.println("Hostname: " + client_hostname);
+      #endif
     #endif
 
     while (Serial.available() <= 0){}
@@ -153,6 +166,7 @@ void setup() {
     #endif
   #endif
 
+  WiFi.mode(WIFI_STA);
   WiFi.begin(wifi_ssid, wifi_password);
   WiFi.setAutoReconnect(true);
 
@@ -168,43 +182,61 @@ void setup() {
     Serial.print("ipv4: ");
     Serial.println(WiFi.localIP());
   #endif
+
+  #if ENABLE_SSDP == 1
+    HTTP.on("/index.html", HTTP_GET, []() {
+      HTTP.send(200, "text/plain", "Hello World!");
+    });
+    HTTP.on("/description.xml", HTTP_GET, []() {
+      SSDP.schema(HTTP.client());
+    });
+    HTTP.begin();
+
+    //Serial.printf("Starting SSDP...\n");
+    SSDP.setSchemaURL("description.xml");
+    SSDP.setHTTPPort(80);
+    SSDP.setName("ESP8266-esp01");
+    SSDP.setSerialNumber("001788102201");
+    SSDP.setURL("index.html");
+    SSDP.setModelName("esp01");
+    SSDP.setModelNumber("929000226503");
+    SSDP.setModelURL("https://www.espressif.com/");
+    SSDP.setManufacturer("Espressif");
+    SSDP.setManufacturerURL("https://www.espressif.com/");
+    SSDP.begin();
+  #endif
 }
 
 static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
-  while (1)
-  {
+  if ((!server) || (!server.connected())) {
     if (!server.connect(hostName, port)) {
       #if ENABLE_SERIAL_PRINT == 1
         Serial.println("Connection failed!");
       #endif
-      delay(100);
-      continue;
-    }
-    else{
-      break;
     }
   }
 }
 
-void sendDataToServer(WiFiClient& server, std::vector<char>& buffer, String hostName, uint16_t port){
+void sendData(WiFiClient& server, std::vector<char>& buffer){
   size_t bytesWrittenNow;
 
-    if (buffer.size() <= 0) {
-      return;
-    }
-  if (!server.connected()) {
-    connectToServer(server, hostName, port);
+  if (buffer.size() <= 0) {
+    return;
+  }
+  if ((!server) || (!server.connected())) {
+    return;
   }
   bytesWrittenNow = server.write(buffer.data(), buffer.size());
   buffer.erase(buffer.begin(),buffer.begin()+bytesWrittenNow);
 }
 
-void readDataFromServer(WiFiClient& server, std::vector<char>& buffer, String hostName, uint16_t port){
-  if (!server.connected()) {
-    connectToServer(server, hostName, port);
+void readData(WiFiClient& server, std::vector<char>& buffer){
+  size_t bytesRead, bytesAvailable;
+
+  if ((!server) || (!server.connected())) {
+    return;
   }
 
-  size_t bytesRead, bytesAvailable;
   if (server.available() > 0)
   {
     bytesAvailable = (size_t)server.available();
@@ -240,7 +272,13 @@ void loop() {
   bool activityInLastIteration = false;
   unsigned int startTime;
   float inactivityTime_ms = 0.0f;
-  WiFiClient server;
+  WiFiClient tcpClient;
+
+  #if CONFIGURATION_SERVER == 1
+    WiFiServer tcpServer(client_port);
+    tcpServer.begin(client_port, 1);
+  #endif
+
   std::vector<char> TXbuffer, RXbuffer;
 
   TXbuffer.clear();
@@ -249,11 +287,14 @@ void loop() {
   RXbuffer.reserve(MAX_BUFFER_SIZE);
 
   startTime = millis();
-  connectToServer(server, client_hostname, client_port);
+
   while (1)
   {
-    if (activityInLastIteration == true)
-    {
+    #if ENABLE_SSDP == 1
+      HTTP.handleClient();
+    #endif
+    
+    if (activityInLastIteration == true) {
       startTime = millis();
     }
     activityInLastIteration = false;
@@ -261,6 +302,24 @@ void loop() {
     if (activeLowPowerMode) {
       delay(LOWPOWER_MODE_LOOP_DELAY_MS);
     }
+
+    #if CONFIGURATION_CLIENT == 1
+      connectToServer(tcpClient, client_hostname, client_port);
+    #endif
+
+    #if CONFIGURATION_SERVER == 1
+      if ((!tcpClient) || (!tcpClient.connected())) {
+          tcpClient = tcpServer.available();
+
+          #if ENABLE_SERIAL_PRINT == 1
+            if(tcpClient && tcpClient.connected())
+              Serial.println("Client connected!");
+              else {
+                  Serial.println("Client NOT connected!");
+              }
+          #endif
+      }
+    #endif
 
     readDataFromSerial(Serial, TXbuffer);
     if (TXbuffer.size() > 0)
@@ -271,10 +330,10 @@ void loop() {
         Serial.write(TXbuffer.data(), TXbuffer.size());
         Serial.println();
       #endif
-      sendDataToServer(server, TXbuffer, client_hostname, client_port);
+      sendData(tcpClient, TXbuffer);
     }
 
-    readDataFromServer(server, RXbuffer, client_hostname, client_port);
+    readData(tcpClient, RXbuffer);
 
     if (RXbuffer.size() > 0)
     {

@@ -16,7 +16,7 @@
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(230400);
   while (!Serial){
     delay(100);
   }

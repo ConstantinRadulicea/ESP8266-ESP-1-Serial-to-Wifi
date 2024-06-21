@@ -20,9 +20,6 @@
 #include <ESP8266WebServer.h>
 #include <vector>
 
-#define CONFIGURATION_CLIENT 1
-#define CONFIGURATION_SERVER 0
-
 #define SERIALPORT_BAUDRATE 230400
 
 
@@ -38,11 +35,18 @@
 #define LOWPOWER_MODE_TIMEOUT_ACTIVATION_MS 1000
 #define LOWPOWER_MODE_LOOP_DELAY_MS 100
 
+typedef enum Configuration {CONFIGURATION_CLIENT, CONFIGURATION_SERVER, CONFIGURATION_NONE}Configuration;
+
 
 String wifi_ssid = "Off Limits";
 String wifi_password = "J7s2tzvzKzva";
 String client_hostname = "192.168.0.247";
 int client_port = 6789;
+Configuration CONFIGURATION = Configuration::CONFIGURATION_SERVER;
+
+String configuration_server = "SERVER";
+String configuration_client = "CLIENT";
+
 
 #if ENABLE_SSDP == 1
   ESP8266WebServer HTTP(80);
@@ -87,6 +91,7 @@ String serialReadStringUntil_blocking(HardwareSerial& serialPort, char terminato
 
 void setup() {
   String initializationTemp = "";
+  String temp_string;
   bool initializationStringFound = false;
   char tempChar;
 
@@ -129,6 +134,26 @@ void setup() {
   #endif
   
   #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+
+    while (Serial.available() <= 0){}
+    temp_string = serialReadStringUntil_blocking(Serial, '\n');
+    removeLastCarrerReturn(temp_string);
+    escapeFrontCommentCharacter(temp_string, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
+    temp_string.toUpperCase();
+    if(temp_string.equals(configuration_server)){
+      CONFIGURATION = Configuration::CONFIGURATION_SERVER;
+    }
+    else if(temp_string.equals(configuration_client)){
+      CONFIGURATION = Configuration::CONFIGURATION_CLIENT;
+    }
+    else{
+      CONFIGURATION = Configuration::CONFIGURATION_NONE;
+    }
+    #if ENABLE_SERIAL_PRINT == 1
+      Serial.println("CONFIGURATION: " + temp_string);
+    #endif
+
+
     while (Serial.available() <= 0){}
     wifi_ssid = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(wifi_ssid);
@@ -145,7 +170,7 @@ void setup() {
       Serial.println("Password: " + wifi_password);
     #endif
     
-    #if CONFIGURATION_CLIENT == 1
+    if (CONFIGURATION == Configuration::CONFIGURATION_CLIENT) {
       while (Serial.available() <= 0){}
       client_hostname = serialReadStringUntil_blocking(Serial, '\n');
       removeLastCarrerReturn(client_hostname);
@@ -153,8 +178,8 @@ void setup() {
       #if ENABLE_SERIAL_PRINT == 1
         Serial.println("Hostname: " + client_hostname);
       #endif
-    #endif
-
+    }
+    
     while (Serial.available() <= 0){}
     String temp_port_str = serialReadStringUntil_blocking(Serial, '\n');
     removeLastCarrerReturn(temp_port_str);
@@ -273,11 +298,8 @@ void loop() {
   unsigned int startTime;
   float inactivityTime_ms = 0.0f;
   WiFiClient tcpClient;
-
-  #if CONFIGURATION_SERVER == 1
-    WiFiServer tcpServer(client_port);
-    tcpServer.begin(client_port, 1);
-  #endif
+  WiFiServer tcpServer(client_port);
+  tcpServer.begin(client_port, 1);
 
   std::vector<char> TXbuffer, RXbuffer;
 
@@ -303,23 +325,22 @@ void loop() {
       delay(LOWPOWER_MODE_LOOP_DELAY_MS);
     }
 
-    #if CONFIGURATION_CLIENT == 1
-      connectToServer(tcpClient, client_hostname, client_port);
-    #endif
+    if (CONFIGURATION == Configuration::CONFIGURATION_SERVER) {
+        if ((!tcpClient) || (!tcpClient.connected())) {
+            tcpClient = tcpServer.available();
 
-    #if CONFIGURATION_SERVER == 1
-      if ((!tcpClient) || (!tcpClient.connected())) {
-          tcpClient = tcpServer.available();
-
-          #if ENABLE_SERIAL_PRINT == 1
-            if(tcpClient && tcpClient.connected())
-              Serial.println("Client connected!");
-              else {
-                  Serial.println("Client NOT connected!");
-              }
-          #endif
-      }
-    #endif
+            #if ENABLE_SERIAL_PRINT == 1
+              if(tcpClient && tcpClient.connected())
+                Serial.println("Client connected!");
+                else {
+                    Serial.println("Client NOT connected!");
+                }
+            #endif
+        }
+    }
+    else if (CONFIGURATION == Configuration::CONFIGURATION_CLIENT) {
+        connectToServer(tcpClient, client_hostname, client_port);
+    }
 
     readDataFromSerial(Serial, TXbuffer);
     if (TXbuffer.size() > 0)

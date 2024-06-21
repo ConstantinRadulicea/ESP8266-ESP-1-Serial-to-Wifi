@@ -1,11 +1,9 @@
 Using this repository you can bridge a serial connection over wifi using an ESP8266-esp01.
 The code in this repository is ment to be uploaded on the ESP.
 The esp can used in 2 ways:
-1) Client (default):
-   In this configuration, the esp connects to a tcp server whose ip is sent by the serial device.
+1) CLIENT: In this configuration, the esp connects to a tcp server whose ip is sent by the serial device.
 
-2) Server:
-   In this configuration, the esp create a server and accepts one and only one client.
+2) SERVER: In this configuration, the esp create a server and accepts one and only one client.
 
 
   Connection configuration on the serial device:

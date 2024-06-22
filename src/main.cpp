@@ -26,7 +26,6 @@
 #define ENABLE_SERIAL_PRINT 0
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define ENABLE_INIT_SEQUENCE 1
-#define ENABLE_SSDP 1
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 #define MAX_BUFFER_SIZE 16384
 #define INIT_SEQUENCE "%SERIAL2WIFI\r\n"
@@ -44,13 +43,12 @@ String client_hostname = "192.168.0.247";
 int client_port = 6789;
 Configuration CONFIGURATION = Configuration::CONFIGURATION_SERVER;
 
+ESP8266WebServer HTTP(80);
 String configuration_server = "SERVER";
 String configuration_client = "CLIENT";
+bool ENABLE_SSDP = true;
+String endable_ssdp_str = "ENABLE_SSDP";
 
-
-#if ENABLE_SSDP == 1
-  ESP8266WebServer HTTP(80);
-#endif
 
 /*
 SERIAL2WIFI
@@ -87,6 +85,19 @@ String serialReadStringUntil_blocking(HardwareSerial& serialPort, char terminato
     }
   }
   return result;
+}
+
+void serialReadLine(HardwareSerial& serialPort, String &str){
+  str = serialReadStringUntil_blocking(serialPort, '\n');
+  removeLastCarrerReturn(str);
+}
+
+void serialReadParameter(HardwareSerial& serialPort, String &str){
+  serialReadLine(serialPort, str);
+  escapeFrontCommentCharacter(str, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
+  #if ENABLE_SERIAL_PRINT == 1
+    Serial.println(str);
+  #endif
 }
 
 void setup() {
@@ -135,10 +146,7 @@ void setup() {
   
   #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
 
-    while (Serial.available() <= 0){}
-    temp_string = serialReadStringUntil_blocking(Serial, '\n');
-    removeLastCarrerReturn(temp_string);
-    escapeFrontCommentCharacter(temp_string, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
+    serialReadParameter(Serial, temp_string);
     temp_string.toUpperCase();
     if(temp_string.equals(configuration_server)){
       CONFIGURATION = Configuration::CONFIGURATION_SERVER;
@@ -149,46 +157,17 @@ void setup() {
     else{
       CONFIGURATION = Configuration::CONFIGURATION_NONE;
     }
-    #if ENABLE_SERIAL_PRINT == 1
-      Serial.println("CONFIGURATION: " + temp_string);
-    #endif
 
 
-    while (Serial.available() <= 0){}
-    wifi_ssid = serialReadStringUntil_blocking(Serial, '\n');
-    removeLastCarrerReturn(wifi_ssid);
-    escapeFrontCommentCharacter(wifi_ssid, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
-    #if ENABLE_SERIAL_PRINT == 1
-      Serial.println("SSID: " + wifi_ssid);
-    #endif
-
-    while (Serial.available() <= 0){}
-    wifi_password = serialReadStringUntil_blocking(Serial, '\n');
-    removeLastCarrerReturn(wifi_password);
-    escapeFrontCommentCharacter(wifi_password, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
-    #if ENABLE_SERIAL_PRINT == 1
-      Serial.println("Password: " + wifi_password);
-    #endif
+    serialReadParameter(Serial, wifi_ssid);
+    serialReadParameter(Serial, wifi_password);
     
     if (CONFIGURATION == Configuration::CONFIGURATION_CLIENT) {
-      while (Serial.available() <= 0){}
-      client_hostname = serialReadStringUntil_blocking(Serial, '\n');
-      removeLastCarrerReturn(client_hostname);
-      escapeFrontCommentCharacter(client_hostname, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
-      #if ENABLE_SERIAL_PRINT == 1
-        Serial.println("Hostname: " + client_hostname);
-      #endif
+      serialReadParameter(Serial, client_hostname);
     }
     
-    while (Serial.available() <= 0){}
-    String temp_port_str = serialReadStringUntil_blocking(Serial, '\n');
-    removeLastCarrerReturn(temp_port_str);
-    escapeFrontCommentCharacter(temp_port_str, ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING);
-    
-    client_port = temp_port_str.toInt();
-    #if ENABLE_SERIAL_PRINT == 1
-      Serial.println("Port: " + String(client_port));
-    #endif
+    serialReadParameter(Serial, temp_string);
+    client_port = temp_string.toInt();
   #endif
 
   WiFi.mode(WIFI_STA);
@@ -208,28 +187,69 @@ void setup() {
     Serial.println(WiFi.localIP());
   #endif
 
-  #if ENABLE_SSDP == 1
-    HTTP.on("/index.html", HTTP_GET, []() {
-      HTTP.send(200, "text/plain", "Hello World!");
-    });
-    HTTP.on("/description.xml", HTTP_GET, []() {
-      SSDP.schema(HTTP.client());
-    });
-    HTTP.begin();
+  #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+    serialReadParameter(Serial, temp_string);
+    temp_string.toUpperCase();
+    if(temp_string.equals(endable_ssdp_str)){
+      ENABLE_SSDP = true;
+    }
+    else {
+      ENABLE_SSDP = false;
+    }
+    #endif
 
-    //Serial.printf("Starting SSDP...\n");
-    SSDP.setSchemaURL("description.xml");
-    SSDP.setHTTPPort(80);
-    SSDP.setName("ESP8266-esp01");
-    SSDP.setSerialNumber("001788102201");
-    SSDP.setURL("index.html");
-    SSDP.setModelName("esp01");
-    SSDP.setModelNumber("929000226503");
-    SSDP.setModelURL("https://www.espressif.com/");
-    SSDP.setManufacturer("Espressif");
-    SSDP.setManufacturerURL("https://www.espressif.com/");
-    SSDP.begin();
-  #endif
+    if(ENABLE_SSDP == true) {
+      HTTP.on("/index.html", HTTP_GET, []() {
+        HTTP.send(200, "text/plain", "Hello World!");
+      });
+      HTTP.on("/description.xml", HTTP_GET, []() {
+        SSDP.schema(HTTP.client());
+      });
+      HTTP.begin();
+
+      //Serial.printf("Starting SSDP...\n");
+      SSDP.setSchemaURL("description.xml");
+      SSDP.setHTTPPort(80);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setName(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setSerialNumber(temp_string);
+
+      SSDP.setURL("index.html");
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setModelName(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setModelNumber(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setModelURL(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setManufacturer(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
+      SSDP.setManufacturerURL(temp_string);
+
+      SSDP.begin();
+    }
 }
 
 static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
@@ -310,11 +330,10 @@ void loop() {
 
   startTime = millis();
 
-  while (1)
-  {
-    #if ENABLE_SSDP == 1
+  while (1) {
+    if(ENABLE_SSDP == true){
       HTTP.handleClient();
-    #endif
+    }
     
     if (activityInLastIteration == true) {
       startTime = millis();

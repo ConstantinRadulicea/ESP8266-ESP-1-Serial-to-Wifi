@@ -15,17 +15,35 @@ The esp can used in 2 ways:
   */
   
   #include <Arduino.h>
-  
-  #define WIFI_SSID "Off Limits2"
-  #define WIFI_PASSWORD "J7s2tzvzKzva"
-  #define HOST_IPADDRESS "192.168.79.243"
-  #define HOST_PORT 6789
+  #define ENABLE_SERVER 1
+  #define ENABLE_CLIENT 0
+  #define ENABLE_SSDP 1
+
   
   #define ESP_INIT_SEQUENCE "%SERIAL2WIFI\r\n"
   #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
 
-  #define CONFIGURATION "SERVER"
-  //#define CONFIGURATION "CLIENT"
+  #define WIFI_SSID "Off Limits"
+  #define WIFI_PASSWORD "J7s2tzvzKzva"
+  #define HOST_IPADDRESS "192.168.0.247"
+  #define HOST_PORT 6789
+
+  #define SSDP_ENABLE_STRING "ENABLE_SSDP"
+  #define SSDP_NAME "name"
+  #define SSDP_SERIALNUMBER "Serial Number"
+  #define SSDP_MODELNAME "Model Name"
+  #define SSDP_MODELNUMBER "Model Number"
+  #define SSDP_MODELURL "Model URL"
+  #define SSDP_MANUFACTURER "Manufacturer"
+  #define SSDP_MANUFACTURERURL "Manufacturer URL"
+
+  #if ENABLE_SERVER == 1
+    #define CONFIGURATION "SERVER"
+  #endif
+  
+  #if ENABLE_CLIENT == 1
+    #define CONFIGURATION "CLIENT"
+  #endif
   
   void setup() {
     Serial.begin(230400);
@@ -37,8 +55,23 @@ The esp can used in 2 ways:
     Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(CONFIGURATION));
     Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(WIFI_SSID));
     Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(WIFI_PASSWORD));
-    //Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(HOST_IPADDRESS));  // uncomment if using CLIENT configuration
+    #if ENABLE_CLIENT == 1
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(HOST_IPADDRESS));
+    #endif
     Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(HOST_PORT));
+
+    #if ENABLE_SSDP == 1
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_ENABLE_STRING));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_NAME));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_SERIALNUMBER));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MODELNAME));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MODELNUMBER));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MODELURL));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MANUFACTURER));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MANUFACTURERURL));
+    #else
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String("DISABLE_SSDP"));
+    #endif
   }
   
   void loop() {

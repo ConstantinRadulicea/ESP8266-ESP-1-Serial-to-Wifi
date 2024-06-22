@@ -1,0 +1,1 @@
+SP_INIT_SEQUENCE = "%SERIAL2WIFI" + sprintf('\r') + newline;

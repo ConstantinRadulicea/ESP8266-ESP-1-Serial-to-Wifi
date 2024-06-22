@@ -29,6 +29,7 @@ The esp can used in 2 ways:
   #define HOST_PORT 6789
 
   #define SSDP_ENABLE_STRING "ENABLE_SSDP"
+  #define SSDP_DEVICETYPE "urn:schemas-upnp-org:device:MediaServer:1"
   #define SSDP_NAME "name"
   #define SSDP_SERIALNUMBER "Serial Number"
   #define SSDP_MODELNAME "Model Name"
@@ -62,6 +63,7 @@ The esp can used in 2 ways:
 
     #if ENABLE_SSDP == 1
       Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_ENABLE_STRING));
+      Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_DEVICETYPE));
       Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_NAME));
       Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_SERIALNUMBER));
       Serial.println(ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING + String(SSDP_MODELNAME));

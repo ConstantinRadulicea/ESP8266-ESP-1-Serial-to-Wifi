@@ -214,6 +214,11 @@ void setup() {
       #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
         serialReadParameter(Serial, temp_string);
       #endif
+      SSDP.setDeviceType(temp_string);
+
+      #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1
+        serialReadParameter(Serial, temp_string);
+      #endif
       SSDP.setName(temp_string);
 
       #if ENABLE_WIFI_HOST_DATA_FROM_CLIENT == 1

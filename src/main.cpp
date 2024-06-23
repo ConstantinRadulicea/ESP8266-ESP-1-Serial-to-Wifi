@@ -350,7 +350,7 @@ void loop() {
     }
 
     if (CONFIGURATION == Configuration::CONFIGURATION_SERVER) {
-        if ((!tcpClient) || (!tcpClient.connected())) {
+        while ((!tcpClient) || (!tcpClient.connected())) {
             tcpClient = tcpServer.available();
 
             #if ENABLE_SERIAL_PRINT == 1
@@ -363,7 +363,9 @@ void loop() {
         }
     }
     else if (CONFIGURATION == Configuration::CONFIGURATION_CLIENT) {
+      while (!tcpClient || !tcpClient.connected()) {
         connectToServer(tcpClient, client_hostname, client_port);
+      }
     }
 
     readDataFromSerial(Serial, TXbuffer);

@@ -1,4 +1,9 @@
 function read_callback_serialport(src, ~)
     count = src.NumBytesAvailable;
-    disp(src.read(count, 'char'));
+    if count <= 0
+        return;
+    end
+    data = src.read(count, "char");
+    src.UserData.recved = [src.UserData.recved data];
+    disp(data);
 end

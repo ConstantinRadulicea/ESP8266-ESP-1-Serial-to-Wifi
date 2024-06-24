@@ -19,6 +19,10 @@
 #include <ESP8266SSDP.h>
 #include <ESP8266WebServer.h>
 #include <vector>
+#include "rxtxbuffer.h"
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 #define SERIALPORT_BAUDRATE 230400
 
@@ -36,6 +40,8 @@
 
 typedef enum Configuration {CONFIGURATION_CLIENT, CONFIGURATION_SERVER, CONFIGURATION_NONE}Configuration;
 
+char RX_BUFFER[MAX_BUFFER_SIZE];
+char TX_BUFFER[MAX_BUFFER_SIZE];
 
 String wifi_ssid = "Off Limits";
 String wifi_password = "J7s2tzvzKzva";
@@ -267,54 +273,67 @@ static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
   }
 }
 
-void sendData(WiFiClient& server, std::vector<char>& buffer){
-  size_t bytesWrittenNow;
+void sendData(WiFiClient& serialPort, rxtxbuffer *buffer){
+  size_t bytesAvailable, bytesWritten;
+  
+  if ((!serialPort) || (!serialPort.connected())) {
+    return;
+  }
+  if (serialPort.availableForWrite() > 0) {
+    bytesAvailable = (size_t)serialPort.availableForWrite();
 
-  if (buffer.size() <= 0) {
-    return;
+    if (rxtxbuffer_tx_remaining(buffer) > 0) {
+      bytesAvailable = MIN(rxtxbuffer_tx_remaining(buffer), bytesAvailable);
+      bytesWritten = serialPort.write((char*)rxtxbuffer_tx_buf(buffer), bytesAvailable);
+      rxtxbuffer_tx_decrease_size(buffer, bytesWritten);
+      rxtxbuffer_shift_tx_buf(buffer);
+    }
   }
-  if ((!server) || (!server.connected())) {
-    return;
-  }
-  bytesWrittenNow = server.write(buffer.data(), buffer.size());
-  buffer.erase(buffer.begin(),buffer.begin()+bytesWrittenNow);
 }
 
-void readData(WiFiClient& server, std::vector<char>& buffer){
+void readData(WiFiClient& server, rxtxbuffer *buffer){
   size_t bytesRead, bytesAvailable;
 
   if ((!server) || (!server.connected())) {
     return;
   }
 
-  if (server.available() > 0)
-  {
+  if (server.available() > 0) {
     bytesAvailable = (size_t)server.available();
 
-    if ((buffer.size() + bytesAvailable) > MAX_BUFFER_SIZE) {
-      buffer.erase(buffer.begin(),buffer.begin()+((buffer.size() + bytesAvailable) - MAX_BUFFER_SIZE));
+    if (rxtxbuffer_rx_remaining(buffer) > 0) {
+      bytesAvailable = MIN(rxtxbuffer_rx_remaining(buffer), bytesAvailable);
+      bytesRead = server.readBytes((char*)rxtxbuffer_rx_buf(buffer), bytesAvailable);
+      rxtxbuffer_rx_increase_size(buffer, bytesRead);
     }
-    
-    buffer.resize(buffer.size() + bytesAvailable);
-    bytesRead = server.readBytes(buffer.data() + buffer.size() - bytesAvailable, bytesAvailable);
-    buffer.resize((int)buffer.size() - (int)((int)bytesAvailable - (int)bytesRead));
   }
 }
 
-void readDataFromSerial(HardwareSerial& serialPort, std::vector<char>& buffer){
-  size_t bytesAvailableSerial, bytesReadFromSerial;
-    if (serialPort.available() > 0)
-    {
-      bytesAvailableSerial = serialPort.available();
+void readDataFromSerial(HardwareSerial& serialPort, rxtxbuffer *buffer){
+  size_t bytesAvailable, bytesRead;
+  if (serialPort.available() > 0) {
+    bytesAvailable = (size_t)serialPort.available();
 
-      if ((buffer.size() + bytesAvailableSerial) > MAX_BUFFER_SIZE) {
-        buffer.erase(buffer.begin(),buffer.begin()+((buffer.size() + bytesAvailableSerial) - MAX_BUFFER_SIZE));
-      }
-
-      buffer.resize(buffer.size() + bytesAvailableSerial);
-      bytesReadFromSerial = serialPort.readBytes(buffer.data() + buffer.size() - bytesAvailableSerial, bytesAvailableSerial);
-      buffer.resize((int)buffer.size() - (int)((int)bytesAvailableSerial - (int)bytesReadFromSerial));
+    if (rxtxbuffer_rx_remaining(buffer) > 0) {
+      bytesAvailable = MIN(rxtxbuffer_rx_remaining(buffer), bytesAvailable);
+      bytesRead = serialPort.readBytes((char*)rxtxbuffer_rx_buf(buffer), bytesAvailable);
+      rxtxbuffer_rx_increase_size(buffer, bytesRead);
     }
+  }
+}
+
+void writeDataToSerial(HardwareSerial& serialPort, rxtxbuffer *buffer){
+  size_t bytesAvailable, bytesWritten;  
+  if (serialPort.availableForWrite() > 0) {
+    bytesAvailable = (size_t)serialPort.availableForWrite();
+
+    if (rxtxbuffer_tx_remaining(buffer) > 0) {
+      bytesAvailable = MIN(rxtxbuffer_tx_remaining(buffer), bytesAvailable);
+      bytesWritten = serialPort.write((char*)rxtxbuffer_tx_buf(buffer), bytesAvailable);
+      rxtxbuffer_tx_decrease_size(buffer, bytesWritten);
+      rxtxbuffer_shift_tx_buf(buffer);
+    }
+  }
 }
 
 void loop() {
@@ -326,12 +345,9 @@ void loop() {
   WiFiServer tcpServer(client_port);
   tcpServer.begin(client_port, 1);
 
-  std::vector<char> TXbuffer, RXbuffer;
-
-  TXbuffer.clear();
-  RXbuffer.clear();
-  TXbuffer.reserve(MAX_BUFFER_SIZE);
-  RXbuffer.reserve(MAX_BUFFER_SIZE);
+  rxtxbuffer TXbuffer, RXbuffer;
+  rxtxbuffer_init(&TXbuffer, TX_BUFFER, 0, 0, MAX_BUFFER_SIZE);
+  rxtxbuffer_init(&RXbuffer, RX_BUFFER, 0, 0, MAX_BUFFER_SIZE);
 
   startTime = millis();
 
@@ -368,27 +384,27 @@ void loop() {
       }
     }
 
-    readDataFromSerial(Serial, TXbuffer);
-    if (TXbuffer.size() > 0)
+    readDataFromSerial(Serial, &TXbuffer);
+    if (rxtxbuffer_tx_remaining(&TXbuffer) > 0)
     {
       activityInLastIteration = true;
       #if ENABLE_SERIAL_PRINT == 1
-        Serial.print("To server [" + String(TXbuffer.size()) + "]: ");
-        Serial.write(TXbuffer.data(), TXbuffer.size());
+        Serial.print("To server [" + rxtxbuffer_tx_remaining(&TXbuffer) + "]: ");
+        Serial.write(rxtxbuffer_tx_remaining(&TXbuffer), rxtxbuffer_tx_remaining(&TXbuffer));
         Serial.println();
       #endif
-      sendData(tcpClient, TXbuffer);
+      sendData(tcpClient, &TXbuffer);
     }
 
-    readData(tcpClient, RXbuffer);
+    readData(tcpClient, &RXbuffer);
 
-    if (RXbuffer.size() > 0)
+    if (rxtxbuffer_tx_remaining(&RXbuffer) > 0)
     {
       activityInLastIteration = true;
       #if ENABLE_SERIAL_PRINT == 1
         Serial.print("From server: ");
       #endif
-      RXbuffer.erase(RXbuffer.begin(),RXbuffer.begin() + Serial.write(RXbuffer.data(), RXbuffer.size()));
+      writeDataToSerial(Serial, &RXbuffer);
       #if ENABLE_SERIAL_PRINT == 1
         Serial.println();
       #endif

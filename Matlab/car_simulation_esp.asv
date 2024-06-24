@@ -1,9 +1,10 @@
 data = '11,0,27,50;70,0,60,51;11,0,27,50;70,0,60,51;-3.12,1.00,34.38;5.10,1.00,-357.00;-17.21,1.00,704.59;39.00,0.00;43.75,48.28;-0.07;1.00;83.26;48.97;135.00;0;27,26,37,26;0,0,0,0;1;';
 
 looptime_ms = 10;
-bytes_p_s = 30000;
+bytes_p_s = 14000;
 while true
     data2 = [data int2str(randi([0, 255]))];
     device.writeline(data2);
-    pause(length(data2) / bytes_p_s);
+    
+    pause(bytes_p_s/());
 end

@@ -22,7 +22,7 @@ device.UserData.recved = char('');
   ESP_INIT_SEQUENCE = "%SERIAL2WIFI" + sprintf('\r') + newline;
   ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING = '%';
 
-  WIFI_SSID = "Off Limits";
+  WIFI_SSID = "Off Limits2";
   WIFI_PASSWORD = "J7s2tzvzKzva";
   HOST_IPADDRESS = "192.168.0.247";
   HOST_PORT = "6789";

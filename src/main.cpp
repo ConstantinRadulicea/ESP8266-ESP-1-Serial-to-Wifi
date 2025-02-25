@@ -24,14 +24,14 @@
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
-#define SERIALPORT_BAUDRATE 230400
+#define SERIALPORT_BAUDRATE 230400    //230400
 
 
 #define ENABLE_SERIAL_PRINT 0
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define ENABLE_INIT_SEQUENCE 1
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
-#define MAX_BUFFER_SIZE 16384
+#define MAX_BUFFER_SIZE 4096
 #define INIT_SEQUENCE "%SERIAL2WIFI\r\n"
 
 
@@ -275,7 +275,7 @@ static void connectToServer(WiFiClient& server, String hostName, uint16_t port){
 
 void sendData(WiFiClient& serialPort, rxtxbuffer *buffer){
   size_t bytesAvailable, bytesWritten;
-  
+
   if ((!serialPort) || (!serialPort.connected())) {
     return;
   }

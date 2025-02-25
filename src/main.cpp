@@ -31,7 +31,7 @@
 #define ENABLE_WIFI_HOST_DATA_FROM_CLIENT 1
 #define ENABLE_INIT_SEQUENCE 1
 #define ESCAPED_CHARACTER_AT_BEGINNING_OF_STRING '%'
-#define MAX_BUFFER_SIZE 4096
+#define MAX_BUFFER_SIZE 16384
 #define INIT_SEQUENCE "%SERIAL2WIFI\r\n"
 
 
@@ -43,7 +43,7 @@ typedef enum Configuration {CONFIGURATION_CLIENT, CONFIGURATION_SERVER, CONFIGUR
 char RX_BUFFER[MAX_BUFFER_SIZE];
 char TX_BUFFER[MAX_BUFFER_SIZE];
 
-String wifi_ssid = "Off Limits";
+String wifi_ssid = "Off Limits3";
 String wifi_password = "J7s2tzvzKzva";
 String client_hostname = "192.168.0.247";
 int client_port = 6789;
@@ -84,11 +84,13 @@ String serialReadStringUntil_blocking(HardwareSerial& serialPort, char terminato
   {
     while (serialPort.available() > 0){
       tempChar = (char)serialPort.read();
+      yield();
       if (tempChar == terminatorCharacter) {
         return result;
       }
       result += tempChar;
     }
+    yield();
   }
   return result;
 }
@@ -115,11 +117,14 @@ void setup() {
   Serial.setRxBufferSize(2048);
   Serial.begin(SERIALPORT_BAUDRATE);
   while (!Serial){
-    delay(100);
+    yield();
+    delay(10);
   }
   
   #if ENABLE_SERIAL_PRINT == 1
-    while (Serial.availableForWrite() <= 0){}
+    while (Serial.availableForWrite() <= 0){
+      yield();
+    }
     Serial.println("Serial port connected");
   #endif
 
@@ -146,7 +151,9 @@ void setup() {
             break;
           }
         }
+        yield();
       }
+      yield();
     }
   #endif
   
@@ -179,12 +186,14 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifi_ssid, wifi_password);
   WiFi.setAutoReconnect(true);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
+  wl_status_t wifi_status;
+  while ((wifi_status = WiFi.status()) != WL_CONNECTED) {
+    yield();
+    delay(10);
       
     #if ENABLE_SERIAL_PRINT == 1
-      Serial.print(".");
+      Serial.print("Wifi connection status: ");
+      Serial.println(wifi_status);
     #endif
   }
   #if ENABLE_SERIAL_PRINT == 1
@@ -362,8 +371,11 @@ void loop() {
     activityInLastIteration = false;
 
     if (activeLowPowerMode) {
+      yield();
       delay(LOWPOWER_MODE_LOOP_DELAY_MS);
+      yield();
     }
+    yield();
 
     if (CONFIGURATION == Configuration::CONFIGURATION_SERVER) {
         while ((!tcpClient) || (!tcpClient.connected())) {
@@ -376,27 +388,37 @@ void loop() {
                     Serial.println("Client NOT connected!");
                 }
             #endif
-        }
+            yield();
+            delay(10);
+          }
     }
     else if (CONFIGURATION == Configuration::CONFIGURATION_CLIENT) {
       while (!tcpClient || !tcpClient.connected()) {
         connectToServer(tcpClient, client_hostname, client_port);
+        yield();
+        delay(10);
       }
     }
 
+    yield();
     readDataFromSerial(Serial, &TXbuffer);
+    yield();
     if (rxtxbuffer_tx_remaining(&TXbuffer) > 0)
     {
       activityInLastIteration = true;
       #if ENABLE_SERIAL_PRINT == 1
-        Serial.print("To server [" + rxtxbuffer_tx_remaining(&TXbuffer) + "]: ");
-        Serial.write(rxtxbuffer_tx_remaining(&TXbuffer), rxtxbuffer_tx_remaining(&TXbuffer));
+        Serial.print("To server [" + String(rxtxbuffer_tx_remaining(&TXbuffer)) + "]: ");
+        Serial.print(rxtxbuffer_tx_remaining(&TXbuffer), rxtxbuffer_tx_remaining(&TXbuffer));
         Serial.println();
       #endif
+      yield();
       sendData(tcpClient, &TXbuffer);
+      yield();
     }
 
+    yield();
     readData(tcpClient, &RXbuffer);
+    yield();
 
     if (rxtxbuffer_tx_remaining(&RXbuffer) > 0)
     {
@@ -404,7 +426,9 @@ void loop() {
       #if ENABLE_SERIAL_PRINT == 1
         Serial.print("From server: ");
       #endif
+      yield();
       writeDataToSerial(Serial, &RXbuffer);
+      yield();
       #if ENABLE_SERIAL_PRINT == 1
         Serial.println();
       #endif
@@ -427,5 +451,6 @@ void loop() {
       inactivityTime_ms = 0;
       activeLowPowerMode = false;
     }
+    yield();
   }
 }
